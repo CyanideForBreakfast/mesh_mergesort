@@ -6,6 +6,7 @@
 
 int node;
 int num_of_nodes;
+char buf[1000];
 
 int main(int argc, char* argv[]){
     node=0;
@@ -61,6 +62,55 @@ int main(int argc, char* argv[]){
         printf("connect error %d\n",node); 
     }
 
+    Queue* message_q = (Queue*)malloc(sizeof(Queue));
+    Queue* to_recv_q = (Queue*)malloc(sizeof(Queue));
+    message_q->size = 0; to_recv_q->size = 0;
+
+    //push pop testing
+    // Message m;
+    // m.node = 1;
+    // for(int i=0;i<8;i++) {push(to_send_q,m);m.node+=3;}
+    // for(int i=0;i<to_send_q->size;i++) {m=pop(to_send_q);printf("%d ",m.node);}
+    // printf("\n");
+
+    //creating polling mech
+    struct pollfd pfds[2];
+    pfds[0].fd = recv_datafd;
+    pfds[0].events = POLLIN;
+    pfds[1].fd = send_sockfd;
+    pfds[1].events = POLLOUT;
+
+    while(1){
+        int fd_watch_num = message_q->size==0?1:2;
+        //printf("fd_watch_num is %d %d\n",fd_watch_num,node);
+        int num_events = poll(pfds,fd_watch_num,-1);
+        if(num_events<0) printf("poll failed %d.\n",node);
+        //printf("passed %d\n",node);
+        for(int i=0;i<fd_watch_num;i++){
+            if(i==0 && pfds[0].revents != 0){
+                //printf("wating at recieve %d.\n",node);
+                recv(pfds[0].fd, (void*)buf,sizeof(Message),0);
+                printf("recieved message, it is %s\n", ((Message*)&buf)->type);
+                Message m;
+                m = *(Message*)buf;
+                push(message_q,m);
+                //printf("size now: %d\n",to_send_q->size);
+            }
+            if(i==1 && pfds[1].revents != 0){
+                Message m = pop(message_q);
+                send(pfds[1].fd,(char*)&m,sizeof(m),0);
+            }
+        }
+    }
+
     pause();
     return 0;
+}
+
+void processMessage(Message m,Queue* message_q){
+    if(m.node!=node) {
+        push(message_q,m);
+        return;
+    }
+    //mergesort
 }

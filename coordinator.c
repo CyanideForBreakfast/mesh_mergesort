@@ -82,6 +82,11 @@ int main(){
     int recv_datafd = accept(recv_sockfd,(struct sockaddr*)&recv_dataaddr,&recv_dataaddr_len); 
     printf("successfully connected.\n");
 
+    Message m;
+    m.node=6;
+    strcpy(m.type,"hellop");
+    send(send_sockfd,(char*)&m,sizeof(m),0);
+
     pause();
     return 0;
 }
