@@ -4,9 +4,14 @@
 #define PORT_SM_NAME "/node.c"
 #define MUX_NAME "mux_name"
 
+#define MERGE_SORT_TYPE "merge_sort"
+#define MERGE_TYPE "merge"
+
 int node;
 int num_of_nodes;
 char buf[1000];
+
+void processMessage(Message,Queue*);
 
 int main(int argc, char* argv[]){
     node=0;
@@ -66,13 +71,6 @@ int main(int argc, char* argv[]){
     Queue* to_recv_q = (Queue*)malloc(sizeof(Queue));
     message_q->size = 0; to_recv_q->size = 0;
 
-    //push pop testing
-    // Message m;
-    // m.node = 1;
-    // for(int i=0;i<8;i++) {push(to_send_q,m);m.node+=3;}
-    // for(int i=0;i<to_send_q->size;i++) {m=pop(to_send_q);printf("%d ",m.node);}
-    // printf("\n");
-
     //creating polling mech
     struct pollfd pfds[2];
     pfds[0].fd = recv_datafd;
@@ -90,14 +88,20 @@ int main(int argc, char* argv[]){
             if(i==0 && pfds[0].revents != 0){
                 //printf("wating at recieve %d.\n",node);
                 recv(pfds[0].fd, (void*)buf,sizeof(Message),0);
-                printf("recieved message, it is %s\n", ((Message*)&buf)->type);
+                //printf("recieved %d, %s\n",node,((Message*)&buf)->type);
                 Message m;
                 m = *(Message*)buf;
                 push(message_q,m);
+                //printf("pushed %d %d.\n",node,message_q->size);
                 //printf("size now: %d\n",to_send_q->size);
             }
             if(i==1 && pfds[1].revents != 0){
                 Message m = pop(message_q);
+                //printf("popped %d %d.\n",node,message_q->size);
+                if(m.node_to==node){
+                    processMessage(m,message_q);
+                    continue;
+                }
                 send(pfds[1].fd,(char*)&m,sizeof(m),0);
             }
         }
@@ -108,9 +112,35 @@ int main(int argc, char* argv[]){
 }
 
 void processMessage(Message m,Queue* message_q){
-    if(m.node!=node) {
-        push(message_q,m);
-        return;
+    //printf("processing %d, %s,%d,%d\n",node,m.type,m.action,m.num_of_nums);
+    printf("recieved %d: ",node);
+    for(int i=0;i<m.num_of_nums;i++) printf("%d ",m.nums[i]);
+    printf("\n");
+    if(strcmp(m.type,MERGE_SORT_TYPE)==0){
+        if(m.num_of_nums==1) {
+            printf("---------- forever %d %d.\n",node,m.nums[0]);
+            return;
+        }
+
+        Message m1;
+        strcpy(m1.type,MERGE_SORT_TYPE);
+        m1.node_from=node;
+        m1.node_to=node+m.num_of_nums/2;
+        m1.num_of_nums=m.num_of_nums/2;
+        m1.action=m.action+1;
+        for(int i=0;i<m1.num_of_nums;i++) m1.nums[i] = m.nums[i];
+        push(message_q,m1);
+        //printf("pushed %d %d.\n",node,message_q->size);
+
+        Message m2;
+        strcpy(m2.type,MERGE_SORT_TYPE);
+        m2.node_from=node;
+        m2.node_to=node;
+        m2.num_of_nums=m.num_of_nums/2;
+        m2.action=m.action+1;
+        for(int i=0;i<m2.num_of_nums;i++) m2.nums[i] = m.nums[i+m2.num_of_nums];
+        push(message_q,m2);
+        //printf("pushed %d %d.\n",node,message_q->size);
     }
     //mergesort
 }

@@ -4,11 +4,19 @@
 #define PORT_SM_NAME "/node.c"
 #define MUX_NAME "mux_name"
 
+#define MERGE_SORT_TYPE "merge_sort"
+#define MERGE_TYPE "merge"
+
+int node;
 int* nums;
 int num_of_nums;
 int num_of_nodes;
+char buf[1000];
+
+void processMessage(Message,Queue*);
 
 int main(){
+    node=0;
     num_of_nums = 0; num_of_nodes = 1;
     nums = (int*)malloc(MAX_NODES*sizeof(int));
     FILE* fptr;
@@ -82,11 +90,105 @@ int main(){
     int recv_datafd = accept(recv_sockfd,(struct sockaddr*)&recv_dataaddr,&recv_dataaddr_len); 
     printf("successfully connected.\n");
 
-    Message m;
-    m.node=6;
-    strcpy(m.type,"hellop");
-    send(send_sockfd,(char*)&m,sizeof(m),0);
+    //List testing.
+    List* merge_list = (List*)malloc(sizeof(List));
+    // int test[] = {8,7,9,10};
+    // insert(merge_list,1,4,test,0);
+    
+    // insert(merge_list,7,4,test,0);
+    // insert(merge_list,20,4,test,0);
+    // insert(merge_list,2,4,test,0);
+    // printList(merge_list);
+    // delete(merge_list,7);
+    // printList(merge_list);
+    
+    
+    Queue* message_q = (Queue*)malloc(sizeof(Queue));
+    Queue* to_recv_q = (Queue*)malloc(sizeof(Queue));
+    message_q->size = 0; to_recv_q->size = 0;
 
+    Message m;
+    m.node_to=0;
+    strcpy(m.type,MERGE_SORT_TYPE);
+    m.action=0;
+    m.node_from=0;
+    m.num_of_nums=num_of_nodes;
+    for(int i=0;i<m.num_of_nums;i++) m.nums[i] = nums[i];
+
+    //send(send_sockfd,(char*)&m,sizeof(m),0);
+    push(message_q,m);
+    printf("pushed %d %d.\n",node,message_q->size);
+
+    struct pollfd pfds[2];
+    pfds[0].fd = recv_datafd;
+    pfds[0].events = POLLIN;
+    pfds[1].fd = send_sockfd;
+    pfds[1].events = POLLOUT;
+
+    while(1){
+        int fd_watch_num = message_q->size==0?1:2;
+        //printf("fd_watch_num is %d %d\n",fd_watch_num,node);
+        int num_events = poll(pfds,fd_watch_num,-1);
+        if(num_events<0) printf("poll failed %d.\n",node);
+        //printf("passed %d\n",node);
+        for(int i=0;i<fd_watch_num;i++){
+            if(i==0 && pfds[0].revents != 0){
+                //printf("wating at recieve %d.\n",node);
+                recv(pfds[0].fd, (void*)buf,sizeof(Message),0);
+                //printf("recieved %d, %s\n",node,((Message*)&buf)->type);
+                Message m;
+                m = *(Message*)buf;
+                push(message_q,m);
+                //printf("pushed %d %d.\n",node,message_q->size);
+                //printf("size now: %d\n",to_send_q->size);
+            }
+            if(i==1 && pfds[1].revents != 0){
+                Message m = pop(message_q);
+                //printf("popped %d %d\n",node,message_q->size);
+                if(m.node_to==node){
+                    processMessage(m,message_q);
+                    break;
+                }
+                send(pfds[1].fd,(char*)&m,sizeof(m),0);
+            }
+        }
+    }
     pause();
     return 0;
+}
+
+void processMessage(Message m,Queue* message_q){
+    //printf("processing %d, %s,%d,%d\n",node,m.type,m.action,m.num_of_nums);
+    printf("recieved %d: ",node);
+    for(int i=0;i<m.num_of_nums;i++) printf("%d ",m.nums[i]);
+    printf("\n");
+    if(strcmp(m.type,MERGE_SORT_TYPE)==0){
+        if(m.num_of_nums<=1) {
+            printf("---------- forever %d %d.\n",node,m.nums[0]);
+            return;
+        }
+
+        Message m1;
+        strcpy(m1.type,MERGE_SORT_TYPE);
+        m1.node_from=node;
+        m1.node_to=node+m.num_of_nums/2;
+        m1.num_of_nums=m.num_of_nums/2;
+        m1.action=m.action+1;
+        for(int i=0;i<m1.num_of_nums;i++) m1.nums[i] = m.nums[i];
+        push(message_q,m1);
+        //printf("pushed %d %d.\n",node,message_q->size);
+
+        Message m2;
+        strcpy(m2.type,MERGE_SORT_TYPE);
+        m2.node_from=node;
+        m2.node_to=node;
+        m2.num_of_nums=m.num_of_nums/2;
+        m2.action=m.action+1;
+        for(int i=0;i<m2.num_of_nums;i++) m2.nums[i] = m.nums[i+m2.num_of_nums];
+        push(message_q,m2);
+        //printf("pushed %d %d.\n",node,message_q->size);
+    }
+    if(strcmp(m.type,MERGE_TYPE)==0){
+
+    }
 }

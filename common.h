@@ -18,9 +18,12 @@
 #include <poll.h>
 
 typedef struct Message{
-    int node;
-    char type[100];
-    int nums[100];
+    int node_to;
+    int node_from;
+    char type[10];
+    int action;
+    int num_of_nums;
+    int nums[20];
 } Message;
 
 typedef struct Element{
@@ -34,6 +37,23 @@ typedef struct Queue{
     Element* tail;
 } Queue;
 
+typedef struct Item{
+    int action;
+    int num_of_nums;
+    int nums[20];
+    int filled;
+    int node_from;
+    struct Item* next;
+} Item;
+typedef struct List{
+    int length;
+    Item* head;
+} List;
+
 void push(Queue*,Message);
 Message pop(Queue*);
+
+void insert(List*,int,int,int*,int);
+void delete(List*,int action);//delete based on action
+void printList(List*);
 #endif
