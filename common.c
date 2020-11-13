@@ -9,7 +9,7 @@ void push(Queue* q,Message m){
         ele->message = m;
         ele->next = NULL;
         ele->prev = NULL;
-        q->size++;
+        q->size=1;
         q->head = ele;
         q->tail = ele;
         return;    
@@ -23,7 +23,7 @@ void push(Queue* q,Message m){
 }
 Message pop(Queue* q){
     Message temp;
-    if(q->size==0) return temp;
+    if(q->size==0) {printf("no shit I'm going.\n");return temp;}
     q->size--;
     temp = q->head->message;
     Element* temp_ptr = q->head;
@@ -32,13 +32,13 @@ Message pop(Queue* q){
     return temp;
 }
 
-void insert(List* l,int action,int num_of_nums,int* nums,int node_from){
+void insert(List* l,int action,int num_of_nums,int node_from){
     Item* i=(Item*)malloc(sizeof(Item));
     i->action = action;
     i->num_of_nums = num_of_nums;
     i->node_from = node_from;
     i->filled = 0;
-    for(int j=0;j<num_of_nums;j++) i->nums[j] = nums[j];
+    //for(int j=0;j<num_of_nums;j++) i->nums[j] = nums[j];
 
     if(l->length==0){
         l->head = i;
@@ -51,17 +51,20 @@ void insert(List* l,int action,int num_of_nums,int* nums,int node_from){
     l->length++;
 }
 void delete(List* l, int action){
+
     Item* prev = NULL;
     Item* ptr = l->head;
     while(ptr!=NULL){
         if(ptr->action==action){
-            prev->next = ptr->next;
+            if(prev!=NULL) prev->next = ptr->next;
+            else l->head=ptr->next;
             free(ptr);
             break;
         }
         prev=ptr;
         ptr=ptr->next;
     }
+    l->length--;
 }
 
 void printList(List* l){

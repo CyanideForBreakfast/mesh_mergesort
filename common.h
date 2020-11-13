@@ -16,6 +16,9 @@
 #include <sys/types.h>
 #include <limits.h>
 #include <poll.h>
+#include <stdbool.h>
+#include <errno.h>
+#include <signal.h>
 
 typedef struct Message{
     int node_to;
@@ -53,7 +56,7 @@ typedef struct List{
 void push(Queue*,Message);
 Message pop(Queue*);
 
-void insert(List*,int,int,int*,int);
+void insert(List*,int,int,int);
 void delete(List*,int action);//delete based on action
 void printList(List*);
 #endif
