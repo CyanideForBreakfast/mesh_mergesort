@@ -4,8 +4,9 @@
 #define PORT_SM_NAME "/node.c"
 #define MUX_NAME "mux_name"
 
-#define MERGE_SORT_TYPE "merge_sort"
-#define MERGE_TYPE "merge"
+#define MERGE_SORT_TYPE "MERGE_SORT"
+#define MERGE_TYPE "SORTED_LIST"
+#define PASS_TYPE "PASS_MESSAGE"
 
 int node;
 int* nums;
@@ -15,6 +16,7 @@ char buf[1000];
 List* merge_list;
 
 sem_t* print_mux;
+unsigned short int* port_sm_ptr;
 
 void processMessage(Message,Queue*);
 void merge_and_fill(int*,int*,int*,int);
@@ -24,6 +26,7 @@ void endProg(int);
 void endProg(int sig){
     char *args[]={"killall node",NULL}; 
     execvp(args[0],args);
+    sleep(1);
     exit(1); 
 }
 
@@ -32,23 +35,30 @@ int main(){
     node=0;
     num_of_nums = 0; num_of_nodes = 1;
     nums = (int*)malloc(MAX_NODES*sizeof(int));
-    FILE* fptr;
-    if((fptr = fopen("./nums.txt","r"))==NULL) printf("error opening file.\n");
-    fscanf(fptr,"%d",&num_of_nums); //first number denotes number of nums
-    for(int i=0;i<num_of_nums;i++){fscanf(fptr,"%d",&nums[i]);}
-    for(int i=0;i<num_of_nums;i++) printf("%d\t",nums[i]); printf("\n");
-
     int n;
-    printf("Enter n for 2^n nodes: ");
+    printf("Make sure file has 2^n integers.\n");
+    printf("Enter n for 2^n nodes (= total number of integers to be sorted): ");
     scanf("%d",&n);
     for(int i=0;i<n;i++) num_of_nodes*=2;
     printf("%d\n",num_of_nodes);
+    FILE* fptr;
+    if((fptr = fopen("./nums.txt","r"))==NULL) printf("error opening file.\n");
+    //fscanf(fptr,"%d",&num_of_nums); //first number denotes number of nums
+    num_of_nums=num_of_nodes;
+    for(int i=0;i<num_of_nums;i++){fscanf(fptr,"%d",&nums[i]);}
+    for(int i=0;i<num_of_nums;i++) printf("%d\t",nums[i]); printf("\n");
+
+    // int n;
+    // printf("Enter n for 2^n nodes: ");
+    // scanf("%d",&n);
+    // for(int i=0;i<n;i++) num_of_nodes*=2;
+    // printf("%d\n",num_of_nodes);
 
     //create shared memory of ports and an semaphore
     int port_sm = shm_open(PORT_SM_NAME, O_CREAT | O_RDWR, 0600);
     if(port_sm<0) printf("shm_open error.\n");
     ftruncate(port_sm,MAX_NODES*sizeof(unsigned short int)); 
-    unsigned short* port_sm_ptr = (unsigned short*)mmap(0,MAX_NODES*sizeof(unsigned short*),PROT_WRITE|PROT_READ,MAP_SHARED,port_sm,0);
+    port_sm_ptr = (unsigned short*)mmap(0,MAX_NODES*sizeof(unsigned short*),PROT_WRITE|PROT_READ,MAP_SHARED,port_sm,0);
 
     sem_t* mux = sem_open(MUX_NAME,O_CREAT,0660,0);
     if(mux==SEM_FAILED) printf("sem_open error.\n"); 
@@ -82,11 +92,12 @@ int main(){
             char *args[]={"./node",value,total_nodes_string,NULL}; 
             execvp(args[0],args); 
         }
-        printf("Waiting now.\n");
+        //printf("Waiting now.\n");
         sem_wait(mux);
     }   
 
-    for(int i=0;i<num_of_nodes;i++) printf("%hu ",port_sm_ptr[i]);
+    printf("Node\tPort\n");
+    for(int i=0;i<num_of_nodes;i++) printf("%d\t%hu\n",i+1,port_sm_ptr[i]);
     printf("\n");
 
     struct sockaddr_in recv_dataaddr;
@@ -103,7 +114,7 @@ int main(){
     if(connect(send_sockfd,(struct sockaddr*)&send_sockaddr,sizeof(send_sockaddr))<0) printf("connect error.\n"); 
 
     int recv_datafd = accept(recv_sockfd,(struct sockaddr*)&recv_dataaddr,&recv_dataaddr_len); 
-    printf("successfully connected.\n");
+    printf("Node 0 successfully connected in mesh.\n");
 
     //List testing.
     merge_list = (List*)malloc(sizeof(List));
@@ -134,7 +145,7 @@ int main(){
 
     //send(send_sockfd,(char*)&m,sizeof(m),0);
     push(message_q,m);
-    printf("pushed %d %d.\n",node,message_q->size);
+    //printf("pushed %d %d.\n",node,message_q->size);
 
     struct pollfd pfds[2];
     pfds[0].fd = recv_datafd;
@@ -142,8 +153,11 @@ int main(){
     pfds[1].fd = send_sockfd;
     pfds[1].events = POLLOUT;
 
-    signal(SIGINT,endProg);
+    //signal(SIGINT,endProg);
 
+    printf("\nMessage_Types:\n");
+    printf("MERGE_SORT: Mergesort request sent.\nSORTED_LIST: Sorted List returned.\nPASS_MESSAGE: Message not message for this node hence passed to the next.\n\n");
+    printf("Node(Port)\tMessage_Type\tNode_From->Node_To\n");
     while(1){
         int fd_watch_num = message_q->size==0?1:2;
         //printf("fd_watch_num is %d %d\n",fd_watch_num,node);
@@ -151,6 +165,7 @@ int main(){
         if(num_events<0) printf("poll failed %d.\n",node);
         //printf("passed %d\n",node);
         for(int i=0;i<fd_watch_num;i++){
+            //printf("checkpoint.\n");
             if(i==0 && pfds[0].revents != 0){
                 int b=-2;
                 if((b=recv(pfds[0].fd, (void*)buf,sizeof(Message),0))<(int)sizeof(Message)){
@@ -166,6 +181,12 @@ int main(){
             }
             if(i==1 && pfds[1].revents != 0){
                 Message m = pop(message_q);
+                if(m.node_to==-666){
+                    printf("--*---*---\nSorted List: ");
+                    for(int i=0;i<m.num_of_nums;i++) printf("%d ",m.nums[i]);
+                    printf("\n---*---*---\n");
+                    kill(getpid(),SIGINT);
+                }
                 printMessageInfo(&m);
                 //printf("popped %d %d\n",node,message_q->size);
                 if(m.node_to==node){
@@ -306,11 +327,21 @@ void merge_and_fill(int* nums1,int* nums2,int* final,int each_nums_size){
 }
 
 void printMessageInfo(Message* m){
-    sem_wait(print_mux);
-    printf("---%d---\n",node);
-    printf("%s\n",m->type);
-    printf("%d %d\n",m->node_from,m->node_to);
-    for(int i=0;i<m->num_of_nums;i++) printf("%d ",m->nums[i]);
-    printf("\n");
-    sem_post(print_mux);
+    //printf("waiting here.\n");
+    //sem_wait(print_mux);
+    //printf("wait ended.\n");
+    // printf("---%d---\n",node);
+    // printf("%s\n",m->type);
+    // printf("%d %d\n",m->node_from,m->node_to);
+    // for(int i=0;i<m->num_of_nums;i++) printf("%d ",m->nums[i]);
+    // printf("\n");
+
+    if(m->node_from!=node){
+        char pass_msg[20];
+        strcpy(pass_msg,PASS_TYPE);
+        printf("%d(%hu)\t\t%s\t%d -> %d\n",node,port_sm_ptr[node],pass_msg,m->node_from==-666?-1:m->node_from,m->node_to);
+        return;
+    }
+    printf("%d(%hu)\t\t%s\t%d -> %d\n",node,port_sm_ptr[node],m->type,m->node_from,m->node_to);
+    //sem_post(print_mux);
 }

@@ -4,8 +4,9 @@
 #define PORT_SM_NAME "/node.c"
 #define MUX_NAME "mux_name"
 
-#define MERGE_SORT_TYPE "merge_sort"
-#define MERGE_TYPE "merge"
+#define MERGE_SORT_TYPE "MERGE_SORT"
+#define MERGE_TYPE "SORTED_LIST"
+#define PASS_TYPE "PASS_MESSAGE"
 
 int node;
 int num_of_nodes;
@@ -13,6 +14,7 @@ char buf[1000];
 List* merge_list;
 
 sem_t* print_mux;
+unsigned short int* port_sm_ptr;
 
 void processMessage(Message,Queue*);
 void merge_and_fill(int*,int*,int*,int);
@@ -23,11 +25,11 @@ int main(int argc, char* argv[]){
     node=atoi(argv[1]);
     num_of_nodes = 1;
     num_of_nodes = atoi(argv[2]);
-    printf("started node %d.\n",node);
+    //printf("started node %d.\n",node);
 
     int port_sm = shm_open(PORT_SM_NAME, O_CREAT | O_RDWR, 0600);
     if(port_sm<0) printf("shm_open error.\n"); 
-    unsigned short* port_sm_ptr = (unsigned short*)mmap(0,MAX_NODES*sizeof(unsigned short*),PROT_WRITE|PROT_READ,MAP_SHARED,port_sm,0);
+    port_sm_ptr = (unsigned short*)mmap(0,MAX_NODES*sizeof(unsigned short*),PROT_WRITE|PROT_READ,MAP_SHARED,port_sm,0);
 
     sem_t* mux = sem_open(MUX_NAME,O_CREAT,0660,0);
     if(mux==SEM_FAILED) printf("sem_open error %d.\n",node);
@@ -51,14 +53,14 @@ int main(int argc, char* argv[]){
     }
     if(listen(recv_sockfd,100)<0) printf("listen error %d.\n",node);
 
-    printf("opening semaphore in %d.\n",node);
+    //printf("opening semaphore in %d.\n",node);
     sem_post(mux);
 
     //accept data connection
     struct sockaddr_in recv_dataaddr;
     int recv_dataaddr_len = sizeof(recv_dataaddr);
     int recv_datafd = accept(recv_sockfd,(struct sockaddr*)&recv_dataaddr,&recv_dataaddr_len); 
-    printf("successfully connected %d.\n",node);
+    printf("Node %d successfully connected in mesh.\n",node);
 
     //make connection to next node
     //opening sending socket
@@ -255,11 +257,21 @@ void merge_and_fill(int* nums1,int* nums2,int* final,int each_nums_size){
 }
 
 void printMessageInfo(Message* m){
-    sem_wait(print_mux);
-    printf("---%d---\n",node);
-    printf("%s\n",m->type);
-    printf("%d %d\n",m->node_from,m->node_to);
-    for(int i=0;i<m->num_of_nums;i++) printf("%d ",m->nums[i]);
-    printf("\n");
-    sem_post(print_mux);
+    //printf("waiting here.\n");
+    //sem_wait(print_mux);
+    //printf("wait ended.\n");
+    // printf("---%d---\n",node);
+    // printf("%s\n",m->type);
+    // printf("%d %d\n",m->node_from,m->node_to);
+    // for(int i=0;i<m->num_of_nums;i++) printf("%d ",m->nums[i]);
+    // printf("\n");
+
+    if(m->node_from!=node){
+        char pass_msg[20];
+        strcpy(pass_msg,PASS_TYPE);
+        printf("%d(%hu)\t\t%s\t%d -> %d\n",node,port_sm_ptr[node],pass_msg,m->node_from==-666?-1:m->node_from,m->node_to);
+        return;
+    }
+    printf("%d(%hu)\t\t%s\t%d -> %d\n",node,port_sm_ptr[node],m->type,m->node_from,m->node_to);
+    //sem_post(print_mux);
 }
